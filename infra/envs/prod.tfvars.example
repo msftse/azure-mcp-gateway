@@ -1,11 +1,12 @@
-# Example terraform.tfvars for prod environment
-# Copy this file to terraform.tfvars and fill in your values
-# DO NOT commit terraform.tfvars to source control
+# Example prod.tfvars for production environment
+# Copy this file to prod.tfvars and fill in your values
+# DO NOT commit prod.tfvars to source control
+# Usage: terraform plan -var-file="prod.tfvars"
 
 # Azure Configuration
 subscription_id = "<your-subscription-id>"
 tenant_id       = "<your-tenant-id>"
-location        = "eastus"
+location        = "swedencentral"
 environment     = "prod"
 project_name    = "mcpgw"
 
@@ -19,8 +20,8 @@ function_app_plan_sku = "EP1"        # Elastic Premium
 webapp_sku            = "P1v3"       # Production App Service tier
 
 # Foundry Agent Configuration
-create_foundry_agent = false
-foundry_agent_client_id = "<your-prod-foundry-agent-client-id>"
+# REQUIRED: Provide the Principal ID (object ID) of your Foundry Agent's Managed Identity
+foundry_agent_principal_id = "<your-foundry-agent-principal-id>"
 
 # Optional: Foundry Endpoint
 foundry_endpoint = "https://yourfoundry.endpoint.com"

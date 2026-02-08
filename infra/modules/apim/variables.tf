@@ -54,14 +54,10 @@ variable "function_app_hostname" {
   type        = string
 }
 
-variable "apim_api_audience" {
-  description = "Audience for APIM API (e.g., api://apim-api-identifier)"
+variable "foundry_agent_principal_id" {
+  description = "Principal ID (object ID) of the Foundry Agent's Managed Identity"
   type        = string
-}
-
-variable "foundry_agent_client_id" {
-  description = "Client ID of the Foundry Agent"
-  type        = string
+  default     = ""
 }
 
 variable "log_analytics_workspace_id" {

@@ -1,5 +1,6 @@
 # Terraform Backend Configuration for Production
-# Use this file with: terraform init -backend-config=backend-config.tfvars
+# Copy this file to backend-config-prod.tfvars and fill in your values
+# Use this file with: terraform init -backend-config=backend-config-prod.tfvars
 
 resource_group_name  = "rg-terraform-state"
 storage_account_name = "sttfstateprod<unique-suffix>"

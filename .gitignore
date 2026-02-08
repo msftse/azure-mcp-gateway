@@ -12,8 +12,8 @@ override.tf.json
 *_override.tf.json
 .terraformrc
 terraform.rc
-backend-config.tfvars
-!backend-config.tfvars.example
+backend-config-*.tfvars
+!backend-config-*.tfvars.example
 
 # Python
 __pycache__/

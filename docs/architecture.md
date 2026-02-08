@@ -2,7 +2,9 @@
 
 ## Overview
 
-This solution provides a **security-first, enterprise-grade** Azure architecture for exposing a Slack MCP (Model Context Protocol) Server through a fully private, zero-trust design. All components communicate exclusively over private networking with identity-based authentication.
+This solution provides a **security-first, enterprise-grade** Azure architecture for exposing a Slack MCP (Model Context Protocol) Server through a fully private, zero-trust design. All components communicate exclusively over private networking with **Managed Identity-based authentication**.
+
+**Region**: All resources are deployed to **Sweden Central** for European data residency compliance.
 
 ## Architecture Diagram
 
@@ -94,9 +96,11 @@ All DNS zones are linked to the VNet for private name resolution.
 **Technology**: Azure AI Foundry service
 
 **Security**:
-- Uses Managed Identity or Service Principal
-- Issues Entra ID tokens with specific audience for APIM
-- Only authorized identity allowed to call APIM
+- Uses **Managed Identity** (System-assigned or User-assigned)
+- No client secrets or app registrations required
+- Acquires Entra ID tokens automatically via IMDS
+- Token audience: Function App URL (`https://<function-app>.azurewebsites.net`)
+- Only authorized identity allowed to call APIM (validated by Principal ID)
 
 **Purpose**: Orchestrates requests between frontend and backend MCP services
 
@@ -111,10 +115,10 @@ All DNS zones are linked to the VNet for private name resolution.
 - **NO public endpoint**
 - Inbound policy: `validate-jwt` with:
   - Tenant-specific issuer validation
-  - Audience validation (`api://<apim-app-id>`)
-  - Client identity validation (only Foundry Agent `appid`)
+  - Audience validation (Function App URL)
+  - Principal ID validation (only Foundry Agent `oid` claim)
 - Outbound: Uses System-assigned Managed Identity to call Functions
-- Entra ID token acquisition for Function App audience
+- Entra ID token acquisition for Function App audience (automatic via IMDS)
 
 **Purpose**: 
 - API gateway and security boundary

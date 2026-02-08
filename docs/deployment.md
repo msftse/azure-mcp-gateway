@@ -70,8 +70,8 @@ The Terraform state is stored in Azure Storage for team collaboration and state 
 ### Option A: Automated Bootstrap (Recommended)
 
 ```powershell
-cd infra/envs/dev
-.\bootstrap.ps1
+cd infra/envs
+.\bootstrap.ps1  # If available
 ```
 
 This script creates:
@@ -108,7 +108,7 @@ az storage container create `
   --account-key $ACCOUNT_KEY
 ```
 
-2. Create `backend-config.tfvars`:
+2. Create `backend-config-dev.tfvars`:
 ```hcl
 resource_group_name  = "rg-terraform-state"
 storage_account_name = "<your-storage-account-name>"
@@ -118,13 +118,13 @@ key                  = "dev.terraform.tfstate"
 
 ## Step 4: Configure Environment Variables
 
-Create `infra/envs/dev/terraform.tfvars`:
+Create `infra/envs/dev.tfvars`:
 
 ```hcl
 # Azure settings
 subscription_id = "<your-subscription-id>"
 tenant_id       = "<your-tenant-id>"
-location        = "eastus"
+location        = "swedencentral"  # Sweden Central region
 environment     = "dev"
 
 # Resource naming
@@ -145,10 +145,10 @@ function_app_version = "3.11"
 # Frontend
 webapp_sku = "B1"  # Basic tier, use P1v2+ for production
 
-# AI Foundry Agent (if creating new)
-# If using existing agent, provide client_id instead
-create_foundry_agent = true
-# foundry_agent_client_id = "<existing-agent-client-id>"  # Uncomment if using existing
+# Foundry Agent Managed Identity
+# Provide the Principal ID (Object ID) of your Foundry Agent's Managed Identity
+# Leave empty for dev/testing to allow any managed identity
+foundry_agent_principal_id = ""  # Or "<principal-id-guid>"
 
 # Tags
 tags = {
@@ -156,21 +156,31 @@ tags = {
   Project     = "Azure MCP Gateway"
   ManagedBy   = "Terraform"
   CostCenter  = "Engineering"
+  Region      = "Sweden Central"
 }
 ```
 
-**Security Note**: Do NOT commit `terraform.tfvars` to source control if it contains sensitive values. Add to `.gitignore`.
+**Security Note**: Do NOT commit `dev.tfvars` or `prod.tfvars` to source control if it contains sensitive values. Add to `.gitignore`.
 
 ## Step 5: Initialize Terraform
 
+**For Development:**
 ```powershell
-cd infra/envs/dev
+cd infra/envs
 
 # Initialize with backend configuration
-terraform init -backend-config=backend-config.tfvars
+terraform init -backend-config=backend-config-dev.tfvars
 
 # Or if using local backend for testing
 terraform init
+```
+
+**For Production:**
+```powershell
+cd infra/envs
+
+# Initialize with production backend configuration
+terraform init -backend-config=backend-config-prod.tfvars
 ```
 
 Expected output:
@@ -186,8 +196,14 @@ Terraform has been successfully initialized!
 
 ## Step 6: Review Deployment Plan
 
+**Development:**
 ```powershell
-terraform plan -out=tfplan
+terraform plan -var-file="dev.tfvars" -out=tfplan
+```
+
+**Production:**
+```powershell
+terraform plan -var-file="prod.tfvars" -out=tfplan
 ```
 
 This generates an execution plan showing:
@@ -404,43 +420,106 @@ az monitor app-insights query `
 
 ## Step 12: Configure Foundry Agent
 
-### 12.1 Grant Foundry Agent Access to APIM
+### 12.1 Get Foundry Agent Managed Identity Principal ID
 
-The Terraform deployment automatically:
-1. Creates App Registration for APIM API (`api://...`)
-2. Exposes `API.Access` scope
-3. Pre-authorizes Foundry Agent client ID (if provided)
+If you haven't already, identify your Foundry Agent's Managed Identity:
 
-### 12.2 Configure Foundry Agent to Call APIM
+```powershell
+# If using system-assigned MI on a resource
+az resource show \
+  --ids /subscriptions/<sub-id>/resourceGroups/<rg>/providers/Microsoft.CognitiveServices/accounts/<foundry-name> \
+  --query identity.principalId -o tsv
 
-In Foundry Agent configuration:
+# If using user-assigned MI
+az identity show \
+  --name <identity-name> \
+  --resource-group <rg> \
+  --query principalId -o tsv
+```
+
+Save this Principal ID - you'll need it for the `foundry_agent_principal_id` variable.
+
+### 12.2 Update Terraform Configuration (if not done initially)
+
+If you deployed without configuring the Foundry Agent Principal ID:
+
+1. Edit `infra/envs/dev/terraform.tfvars`:
+   ```hcl
+   foundry_agent_principal_id = "<principal-id-from-step-12.1>"
+   ```
+
+2. Re-apply Terraform:
+   ```powershell
+   cd infra/envs/dev
+   terraform apply
+   ```
+
+   This updates the APIM JWT validation policy to only accept tokens from your Foundry Agent.
+
+### 12.3 Configure Foundry Agent to Call APIM
+
+In your Foundry Agent configuration, use Managed Identity authentication:
 
 ```json
 {
   "mcpServer": {
     "endpoint": "https://<apim-private-ip>/mcp",
     "authentication": {
-      "type": "AzureAD",
-      "tenantId": "<tenant-id>",
-      "clientId": "<foundry-agent-client-id>",
-      "clientSecret": "<foundry-agent-secret>",
-      "scope": "api://<apim-app-id>/.default"
+      "type": "ManagedIdentity",
+      "resource": "https://<function-app-name>.azurewebsites.net"
     }
   }
 }
 ```
 
+The Foundry Agent will automatically acquire tokens using its Managed Identity via IMDS.
+
 **Note**: Replace `<apim-private-ip>` with the APIM private IP from Terraform outputs.
 
 ## Production Deployment
 
-### Differences for Production Environment
+### Using Production Configuration
 
 ```powershell
-cd infra/envs/prod
+cd infra/envs
+
+# Copy and edit production configuration
+cp prod.tfvars.example prod.tfvars
+cp backend-config-prod.tfvars.example backend-config-prod.tfvars
+# Edit prod.tfvars and backend-config-prod.tfvars with your values
+
+# Initialize with production backend
+terraform init -backend-config=backend-config-prod.tfvars
+
+# Plan with production variables
+terraform plan -var-file="prod.tfvars"
+
+# Apply with production variables
+terraform apply -var-file="prod.tfvars"
 ```
 
-Update `terraform.tfvars`:
+### Production Configuration Differences
+
+The `prod.tfvars.example` includes production-ready defaults:
+
+```hcl
+environment = "prod"
+
+# Use production-grade SKUs
+apim_sku_name = "Premium_1"  # For VNet + zone redundancy
+webapp_sku    = "P1v3"
+function_app_plan_sku = "EP1"  # Elastic Premium
+
+# Enable zone redundancy (if using Premium APIM)
+# enable_apim_zones = true
+# apim_availability_zones = ["1", "2", "3"]
+
+# Stricter networking
+enable_nsgs = true
+
+# Enhanced logging
+log_retention_days = 90  # Longer retention for compliance
+```
 ```hcl
 environment = "prod"
 
@@ -565,14 +644,18 @@ terraform force-unlock <lock-id>
 ### Apply Configuration Changes
 
 ```powershell
-# Make changes to .tf files or terraform.tfvars
-cd infra/envs/dev
+# Make changes to .tf files or tfvars files
+cd infra/envs
 
-# Review changes
-terraform plan
+# Review changes (specify environment)
+terraform plan -var-file="dev.tfvars"
+# or
+terraform plan -var-file="prod.tfvars"
 
 # Apply changes
-terraform apply
+terraform apply -var-file="dev.tfvars"
+# or  
+terraform apply -var-file="prod.tfvars"
 ```
 
 ### Add New Resources
@@ -584,20 +667,19 @@ terraform apply
 
 ## Destroying Infrastructure
 
-**⚠️ WARNING: This deletes ALL resources. Use with extreme caution.**
-
-```powershell
-cd infra/envs/dev
 
 # Review what will be destroyed
-terraform plan -destroy
+terraform plan -destroy -var-file="dev.tfvars"
 
 # Destroy all resources
-terraform destroy
+terraform destroy -var-file="dev.tfvars"
 ```
 
 Confirm with `yes` when prompted.
 
+**Note**: This does NOT delete:
+- Terraform state storage account (intentional, for history)
+- Any resources created outside Terraform
 **Note**: This does NOT delete:
 - Terraform state storage account (intentional, for history)
 - Any resources created outside Terraform

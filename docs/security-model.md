@@ -1,11 +1,12 @@
-# Security Model - Zero Trust Architecture
+# Security Model - Zero Trust Architecture with Managed Identities
 
 ## Executive Summary
 
 This solution implements a **zero-trust security architecture** where:
 - **No component trusts any other by default**
 - **Every request is authenticated and authorized**
-- **No secrets, keys, or shared credentials** are used
+- **No secrets, keys, or app registrations** are used
+- **All authentication uses Azure Managed Identities**
 - **All resources are private** - no public endpoints
 - **Identity is the security perimeter**
 
@@ -13,20 +14,20 @@ This solution implements a **zero-trust security architecture** where:
 
 ### 1. Verify Explicitly
 
-Every request is authenticated using **Azure Entra ID tokens** (formerly Azure AD). No request proceeds without explicit identity verification.
+Every request is authenticated using **Azure Managed Identity tokens**. No request proceeds without explicit identity verification.
 
 ### 2. Least Privilege Access
 
 Each component has only the minimum permissions required:
-- Foundry Agent → Can call APIM only
-- APIM Managed Identity → Can invoke Function App only
-- Function App → Can access Storage Account only
+- Foundry Agent MI → Can call APIM only
+- APIM MI → Can invoke Function App only
+- Function App MI → Can access Storage Account only
 
 ### 3. Assume Breach
 
 Network isolation ensures that even if one component is compromised:
 - Lateral movement is prevented by private networking
-- Access requires valid Entra ID tokens
+- Access requires valid Managed Identity tokens
 - All actions are logged for forensics
 
 ## Authentication & Authorization Architecture
@@ -34,32 +35,29 @@ Network isolation ensures that even if one component is compromised:
 ### Layer 1: Foundry Agent → APIM
 
 #### Authentication Method
-**Entra ID OAuth 2.0 / OpenID Connect**
+**Azure Managed Identity with OAuth 2.0**
 
 #### Identity
-- Foundry Agent uses either:
-  - **System-assigned Managed Identity**, or
-  - **Service Principal (App Registration)**
+- Foundry Agent uses **System-assigned or User-assigned Managed Identity**
+- No client secrets or certificates required
 
 #### Token Acquisition
-```
-POST https://login.microsoftonline.com/{tenant-id}/oauth2/v2.0/token
-Content-Type: application/x-www-form-urlencoded
+The Foundry Agent acquires tokens using Azure Instance Metadata Service (IMDS):
 
-grant_type=client_credentials
-&client_id={foundry-agent-client-id}
-&client_secret={secret-or-certificate}
-&scope=api://{apim-app-id}/.default
+```bash
+# Automatic token acquisition by Managed Identity
+curl 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://<function-app>.azurewebsites.net' \
+  -H "Metadata: true"
 ```
 
 Returns JWT token with:
 ```json
 {
-  "aud": "api://{apim-app-id}",
-  "iss": "https://sts.windows.net/{tenant-id}/",
-  "appid": "{foundry-agent-client-id}",
-  "roles": ["API.Access"],
-  ...
+  "access_token": "eyJ0eXAi...",
+  "resource": "https://<function-app>.azurewebsites.net",
+  "token_type": "Bearer",
+  "expires_in": "3599",
+  "oid": "<foundry-agent-principal-id>"
 }
 ```
 
@@ -68,33 +66,29 @@ Returns JWT token with:
 APIM inbound policy validates the JWT:
 
 ```xml
-<inbound>
-    <validate-jwt 
-        header-name="Authorization" 
-        failed-validation-httpcode="401" 
-        failed-validation-error-message="Unauthorized">
-        <openid-config url="https://login.microsoftonline.com/{tenant-id}/v2.0/.well-known/openid-configuration" />
-        <audiences>
-            <audience>api://{apim-app-id}</audience>
-        </audiences>
-        <issuers>
-            <issuer>https://sts.windows.net/{tenant-id}/</issuer>
-        </issuers>
-        <required-claims>
-            <claim name="appid" match="any">
-                <value>{foundry-agent-client-id}</value>
-            </claim>
-        </required-claims>
-    </validate-jwt>
-</inbound>
+<validate-jwt header-name="Authorization">
+    <openid-config url="https://login.microsoftonline.com/{tenant}/v2.0/.well-known/openid-configuration" />
+    <audiences>
+        <audience>https://{function-app}.azurewebsites.net</audience>
+    </audiences>
+    <issuers>
+        <issuer>https://sts.windows.net/{tenant}/</issuer>
+    </issuers>
+    <required-claims>
+        <!-- Validate token is from specific Foundry Agent MI -->
+        <claim name="oid" match="any">
+            <value>{foundry-agent-principal-id}</value>
+        </claim>
+    </required-claims>
+</validate-jwt>
 ```
 
 **Validation Checks**:
 1. ✅ Token signature is valid (using Microsoft public keys)
 2. ✅ Token has not expired
 3. ✅ Issuer matches tenant
-4. ✅ Audience is `api://{apim-app-id}`
-5. ✅ `appid` claim matches Foundry Agent identity
+4. ✅ Audience is the Function App URL
+5. ✅ `oid` (Object ID) matches Foundry Agent's Principal ID
 6. ❌ **Any other identity is rejected with 401**
 
 ### Layer 2: APIM → Function App
@@ -250,17 +244,18 @@ While NSGs are optional with private endpoints, they can provide defense-in-dept
 
 - **Function keys** - Disabled
 - **Shared secrets** - None
-- **Connection strings with keys** - None
+- **Connection strings with keys** - None (using Managed Identity for storage access)
 - **API subscription keys** - Not used for authentication
-- **Service Principal certificates in code** - None
+- **App Registrations** - Not created or used
+- **Client secrets or certificates** - None
 
 ### ✅ What We DO Use
 
-- **Managed Identities** - For all service-to-service auth
-- **Azure Key Vault** (future) - For Slack API tokens when needed
-  - Accessed via Managed Identity (no keys)
-  - RBAC: Function App MI → Key Vault Secrets User role
-- **Entra ID Tokens** - Short-lived, cryptographically signed
+- **System-assigned Managed Identities** - For all Azure resources (APIM, Function App, Web App)
+- **User-assigned Managed Identities** - For Foundry Agent (customer-provided)
+- **Azure Instance Metadata Service (IMDS)** - For automatic token acquisition
+- **Entra ID Tokens** - Short-lived, cryptographically signed, audience-scoped
+- **RBAC** - For authorization at the Azure control plane level
 
 ## Data Protection
 
@@ -288,7 +283,7 @@ For future Slack integration:
 
 ### Managed Identities
 
-**System-assigned Managed Identities** used for:
+**System-assigned Managed Identities** automatically created for:
 - APIM
 - Function App
 - Web App (Frontend)
@@ -296,22 +291,15 @@ For future Slack integration:
 Advantages:
 - ✅ Lifecycle tied to resource (deleted with resource)
 - ✅ No credential management required
-- ✅ Automatic credential rotation
+- ✅ Automatic credential rotation by Azure platform
 - ✅ Cannot be shared or exfiltrated
+- ✅ No app registrations in Entra ID
+- ✅ Zero-configuration authentication via IMDS
 
-### Service Principals
-
-**Foundry Agent** uses Service Principal (App Registration):
-- Certificate-based authentication preferred over client secret
-- Certificate stored securely (Azure Key Vault or OS certificate store)
-- Regular rotation policy
-
-### Entra ID Configuration
-
-**App Registration for APIM API**:
-- `api://{apim-app-id}` - Application ID URI
-- Exposed API scope: `API.Access`
-- Pre-authorized application: Foundry Agent client ID
+**User-assigned Managed Identity** for Foundry Agent:
+- Customer creates and manages in their subscription
+- Can be assigned to multiple resources if needed
+- Principal ID provided to this solution for allowlisting
 
 **RBAC Role Assignments**:
 ```

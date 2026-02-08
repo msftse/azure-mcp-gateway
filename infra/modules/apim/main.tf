@@ -86,7 +86,7 @@ resource "azurerm_api_management_api_operation" "mcp_endpoint" {
   }
 }
 
-# SECURITY: Inbound Policy with JWT Validation
+# SECURITY: Inbound Policy with Managed Identity Validation
 resource "azurerm_api_management_api_policy" "mcp" {
   api_name            = azurerm_api_management_api.mcp.name
   api_management_name = azurerm_api_management.main.name
@@ -96,22 +96,25 @@ resource "azurerm_api_management_api_policy" "mcp" {
 <policies>
     <inbound>
         <base />
-        <!-- SECURITY: Validate JWT token from Foundry Agent -->
+        <!-- SECURITY: Validate JWT token from Foundry Agent Managed Identity -->
         <validate-jwt header-name="Authorization" 
                       failed-validation-httpcode="401" 
                       failed-validation-error-message="Unauthorized: Invalid or missing authentication token">
             <openid-config url="https://login.microsoftonline.com/${var.tenant_id}/v2.0/.well-known/openid-configuration" />
             <audiences>
-                <audience>${var.apim_api_audience}</audience>
+                <!-- Accept tokens for this APIM instance or Function App -->
+                <audience>https://${var.function_app_hostname}</audience>
+                <audience>https://management.azure.com</audience>
             </audiences>
             <issuers>
                 <issuer>https://sts.windows.net/${var.tenant_id}/</issuer>
                 <issuer>https://login.microsoftonline.com/${var.tenant_id}/v2.0</issuer>
             </issuers>
+            <!-- SECURITY: Validate token is from managed identity (has oid claim) -->
             <required-claims>
-                <!-- SECURITY: Only allow Foundry Agent client ID -->
-                <claim name="appid" match="any">
-                    <value>${var.foundry_agent_client_id}</value>
+                <claim name="oid" match="any">
+                    <!-- Optional: Restrict to specific Foundry Agent principal ID -->
+                    ${var.foundry_agent_principal_id != "" ? "<value>${var.foundry_agent_principal_id}</value>" : ""}
                 </claim>
             </required-claims>
         </validate-jwt>
@@ -135,13 +138,14 @@ resource "azurerm_api_management_api_policy" "mcp" {
 XML
 }
 
-# Named Value for Foundry Agent Client ID (for reference in policies)
-resource "azurerm_api_management_named_value" "foundry_client_id" {
-  name                = "foundry-agent-client-id"
+# Named Value for Foundry Agent Principal ID (for reference in policies)
+resource "azurerm_api_management_named_value" "foundry_principal_id" {
+  count               = var.foundry_agent_principal_id != "" ? 1 : 0
+  name                = "foundry-agent-principal-id"
   resource_group_name = var.resource_group_name
   api_management_name = azurerm_api_management.main.name
-  display_name        = "Foundry Agent Client ID"
-  value               = var.foundry_agent_client_id
+  display_name        = "Foundry Agent Principal ID"
+  value               = var.foundry_agent_principal_id
   secret              = false
 }
 

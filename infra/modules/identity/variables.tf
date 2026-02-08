@@ -18,20 +18,14 @@ variable "resource_group_name" {
   type        = string
 }
 
-variable "create_foundry_agent" {
-  description = "Create new Foundry Agent app registration"
-  type        = bool
-  default     = true
-}
-
-variable "foundry_agent_client_id" {
-  description = "Existing Foundry Agent client ID (if not creating new)"
+variable "foundry_agent_principal_id" {
+  description = "Principal ID (object ID) of the Foundry Agent's Managed Identity"
   type        = string
-  default     = null
+  default     = ""
 }
 
 variable "create_user_assigned_mi" {
-  description = "Create user-assigned managed identity for APIM"
+  description = "Create optional user-assigned managed identity"
   type        = bool
   default     = false
 }

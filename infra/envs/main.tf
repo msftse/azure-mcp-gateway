@@ -1,11 +1,3 @@
-# Production environment uses the same main.tf as dev
-# Symlink to dev main.tf to avoid duplication
-# On Windows: mklink /H main.tf ..\dev\main.tf
-# On Linux/Mac: ln ../dev/main.tf main.tf
-
-# For now, include the same content as dev/main.tf
-# In production use, you may want to customize this further
-
 terraform {
   required_version = ">= 1.5.0"
 
@@ -24,8 +16,13 @@ terraform {
     }
   }
 
+  # Remote backend for state storage
   backend "azurerm" {
-    # Configuration provided via backend-config.tfvars
+    # Configuration provided via backend-config.tfvars or environment variables
+    # resource_group_name  = "rg-terraform-state"
+    # storage_account_name = "sttfstate..."
+    # container_name       = "tfstate"
+    # key                  = "dev.terraform.tfstate"
   }
 }
 
@@ -49,8 +46,10 @@ provider "azuread" {
   tenant_id = var.tenant_id
 }
 
+# Data source for current Azure configuration
 data "azurerm_client_config" "current" {}
 
+# Resource Group
 resource "azurerm_resource_group" "main" {
   name     = "rg-${var.project_name}-${var.environment}"
   location = var.location
@@ -58,8 +57,9 @@ resource "azurerm_resource_group" "main" {
   tags = var.tags
 }
 
+# Networking Module
 module "networking" {
-  source = "../../modules/networking"
+  source = "../modules/networking"
 
   project_name        = var.project_name
   environment         = var.environment
@@ -77,8 +77,9 @@ module "networking" {
   tags = var.tags
 }
 
+# Monitoring Module
 module "monitoring" {
-  source = "../../modules/monitoring"
+  source = "../modules/monitoring"
 
   project_name        = var.project_name
   environment         = var.environment
@@ -91,22 +92,23 @@ module "monitoring" {
   tags = var.tags
 }
 
+# Identity Module
 module "identity" {
-  source = "../../modules/identity"
+  source = "../modules/identity"
 
   project_name        = var.project_name
   environment         = var.environment
   location            = var.location
   resource_group_name = azurerm_resource_group.main.name
 
-  create_foundry_agent    = var.create_foundry_agent
-  foundry_agent_client_id = var.foundry_agent_client_id
+  foundry_agent_principal_id = var.foundry_agent_principal_id
 
   tags = var.tags
 }
 
+# Function App Module
 module "function_app" {
-  source = "../../modules/function_app"
+  source = "../modules/function_app"
 
   project_name        = var.project_name
   environment         = var.environment
@@ -117,7 +119,6 @@ module "function_app" {
   function_app_plan_sku   = var.function_app_plan_sku
   function_runtime        = var.function_runtime
   function_runtime_version = var.function_runtime_version
-  function_app_client_id  = module.identity.apim_api_application_id
 
   application_insights_connection_string = module.monitoring.application_insights_connection_string
 
@@ -132,8 +133,9 @@ module "function_app" {
   tags = var.tags
 }
 
+# APIM Module
 module "apim" {
-  source = "../../modules/apim"
+  source = "../modules/apim"
 
   project_name        = var.project_name
   environment         = var.environment
@@ -148,8 +150,7 @@ module "apim" {
   apim_subnet_id                = module.networking.apim_subnet_id
   function_app_id               = module.function_app.function_app_id
   function_app_hostname         = module.function_app.function_app_default_hostname
-  apim_api_audience             = module.identity.apim_api_identifier_uri
-  foundry_agent_client_id       = module.identity.foundry_agent_application_id
+  foundry_agent_principal_id    = var.foundry_agent_principal_id
   log_analytics_workspace_id    = module.monitoring.log_analytics_workspace_id
 
   tags = var.tags
@@ -157,8 +158,9 @@ module "apim" {
   depends_on = [module.function_app]
 }
 
+# Web App Module
 module "webapp" {
-  source = "../../modules/webapp"
+  source = "../modules/webapp"
 
   project_name        = var.project_name
   environment         = var.environment

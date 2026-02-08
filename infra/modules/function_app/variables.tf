@@ -41,11 +41,6 @@ variable "function_runtime_version" {
   default     = "3.11"
 }
 
-variable "function_app_client_id" {
-  description = "Client ID for Function App Entra ID authentication"
-  type        = string
-}
-
 variable "always_on" {
   description = "Enable Always On for Function App"
   type        = bool

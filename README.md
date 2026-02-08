@@ -8,12 +8,13 @@ This repository contains a complete Infrastructure as Code (IaC) solution for de
 
 ## 🎯 Key Features
 
-- **🔒 Zero-Trust Security**: All authentication via Azure Entra ID + RBAC (no keys, no secrets)
+- **🔒 Zero-Trust Security**: All authentication via Azure Managed Identities + RBAC (no keys, no secrets, no app registrations)
 - **🔐 Private Networking**: All Azure resources accessible only via private endpoints
 - **🏗️ Infrastructure as Code**: Complete Terraform automation for dev and prod environments
 - **🛡️ Defense in Depth**: Network isolation, NSGs, JWT validation, and managed identities
 - **📊 Observability**: Integrated Application Insights and Log Analytics
 - **🚀 Production-Ready**: Enterprise-grade architecture suitable for customer handoff
+- **🌍 Sweden Central**: Deployed to Sweden Central region for European data residency
 
 ## 📋 Architecture
 
@@ -51,8 +52,13 @@ See [docs/architecture.md](./docs/architecture.md) for detailed architecture doc
 │   │   ├── function_app/       # Azure Functions (private)
 │   │   └── webapp/             # Web App (React frontend)
 │   └── envs/
-│       ├── dev/                # Development environment
-│       └── prod/               # Production environment
+│       ├── main.tf             # Main Terraform configuration
+│       ├── variables.tf        # Variable definitions
+│       ├── outputs.tf          # Output definitions
+│       ├── dev.tfvars.example  # Development variables example
+│       ├── prod.tfvars.example # Production variables example
+│       ├── backend-config-dev.tfvars.example   # Dev backend config
+│       └── backend-config-prod.tfvars.example  # Prod backend config
 ├── backend/
 │   └── function_app/           # Python Function App (placeholder)
 ├── frontend/
@@ -82,19 +88,29 @@ cd azure-mcp-gateway
 Create storage account for Terraform state:
 
 ```powershell
-cd infra/envs/dev
+cd infra/envs
 # Run bootstrap script (if available) or create manually
 # See docs/deployment.md for detailed instructions
 ```
 
 ### 3. Configure Environment
 
-Copy and edit `terraform.tfvars`:
+Copy and edit the appropriate tfvars file:
 
+**For Development:**
 ```bash
-cd infra/envs/dev
-cp terraform.tfvars.example terraform.tfvars
-# Edit terraform.tfvars with your values
+cd infra/envs
+cp dev.tfvars.example dev.tfvars
+cp backend-config-dev.tfvars.example backend-config-dev.tfvars
+# Edit dev.tfvars and backend-config-dev.tfvars with your values
+```
+
+**For Production:**
+```bash
+cd infra/envs
+cp prod.tfvars.example prod.tfvars
+cp backend-config-prod.tfvars.example backend-config-prod.tfvars
+# Edit prod.tfvars and backend-config-prod.tfvars with your values
 ```
 
 Required variables:
@@ -102,18 +118,36 @@ Required variables:
 - `tenant_id` - Your Entra ID tenant ID
 - `apim_publisher_name` - Your organization name
 - `apim_publisher_email` - Admin email address
+- `foundry_agent_principal_id` - Principal ID of your Foundry Agent's Managed Identity (optional for dev)
 
 ### 4. Deploy Infrastructure
 
+**Development:**
 ```bash
+cd infra/envs
+
 # Initialize Terraform
-terraform init -backend-config=backend-config.tfvars
+terraform init -backend-config=backend-config-dev.tfvars
 
 # Review deployment plan
-terraform plan
+terraform plan -var-file="dev.tfvars"
 
 # Deploy (takes ~30-45 minutes due to APIM provisioning)
-terraform apply
+terraform apply -var-file="dev.tfvars"
+```
+
+**Production:**
+```bash
+cd infra/envs
+
+# Initialize Terraform  
+terraform init -backend-config=backend-config-prod.tfvars
+
+# Review deployment plan
+terraform plan -var-file="prod.tfvars"
+
+# Deploy
+terraform apply -var-file="prod.tfvars"
 ```
 
 ### 5. Deploy Application Code
@@ -168,10 +202,11 @@ Comprehensive documentation is available in the [`docs/`](./docs) directory:
 This solution enforces the following security requirements:
 
 1. ✅ **ALL resources are private** (no public endpoints)
-2. ✅ **Authentication via Entra ID + RBAC ONLY** (no function keys, no shared secrets)
-3. ✅ **ONLY Foundry Agent can call APIM** (JWT validation with client ID check)
-4. ✅ **ONLY APIM can call Function App** (Managed Identity + RBAC)
+2. ✅ **Authentication via Managed Identities + RBAC ONLY** (no function keys, no shared secrets, no app registrations)
+3. ✅ **ONLY Foundry Agent MI can call APIM** (JWT validation with principal ID check)
+4. ✅ **ONLY APIM MI can call Function App** (Managed Identity + RBAC)
 5. ✅ **Full Terraform automation** (no manual portal steps)
+6. ✅ **Sweden Central region** for European data residency compliance
 
 See [docs/security-model.md](./docs/security-model.md) for detailed security architecture.
 

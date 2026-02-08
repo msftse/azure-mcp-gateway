@@ -1,7 +1,3 @@
-# Production environment uses the same variables as dev
-# Copy from dev/variables.tf
-# Production-specific defaults are set in terraform.tfvars
-
 # Azure Configuration
 variable "subscription_id" {
   description = "Azure subscription ID"
@@ -16,13 +12,13 @@ variable "tenant_id" {
 variable "location" {
   description = "Azure region for resources"
   type        = string
-  default     = "eastus"
+  default     = "swedencentral"
 }
 
 variable "environment" {
   description = "Environment name"
   type        = string
-  default     = "prod"
+  default     = "dev"
 }
 
 variable "project_name" {
@@ -72,7 +68,7 @@ variable "enable_nsgs" {
 variable "log_retention_days" {
   description = "Number of days to retain logs"
   type        = number
-  default     = 90  # Longer retention for production
+  default     = 30
 }
 
 variable "disable_ip_masking" {
@@ -82,22 +78,17 @@ variable "disable_ip_masking" {
 }
 
 # Identity
-variable "create_foundry_agent" {
-  description = "Create new Foundry Agent app registration"
-  type        = bool
-  default     = false  # Use existing in prod
-}
-
-variable "foundry_agent_client_id" {
-  description = "Existing Foundry Agent client ID"
+variable "foundry_agent_principal_id" {
+  description = "Principal ID (object ID) of the Foundry Agent's Managed Identity"
   type        = string
+  default     = ""
 }
 
 # APIM
 variable "apim_sku_name" {
   description = "SKU for APIM"
   type        = string
-  default     = "Premium_1"
+  default     = "Developer_1"
 }
 
 variable "apim_publisher_name" {
@@ -114,7 +105,7 @@ variable "apim_publisher_email" {
 variable "function_app_plan_sku" {
   description = "SKU for Function App Service Plan"
   type        = string
-  default     = "EP1"  # Elastic Premium for production
+  default     = "B1"
 }
 
 variable "function_runtime" {
@@ -133,7 +124,7 @@ variable "function_runtime_version" {
 variable "webapp_sku" {
   description = "SKU for Web App Service Plan"
   type        = string
-  default     = "P1v3"  # Production tier
+  default     = "B1"
 }
 
 variable "node_version" {
@@ -153,7 +144,7 @@ variable "tags" {
   description = "Tags to apply to resources"
   type        = map(string)
   default = {
-    Environment = "prod"
+    Environment = "dev"
     ManagedBy   = "Terraform"
   }
 }

@@ -183,9 +183,14 @@ resource "azurerm_linux_function_app" "main" {
     }
 
     active_directory_v2 {
-      client_id                  = var.function_app_client_id
+      # Use the Function App's own identity as the audience
+      # This allows managed identities with access to call the Function App
       tenant_auth_endpoint       = "https://login.microsoftonline.com/${var.tenant_id}/v2.0"
-      allowed_audiences          = ["https://${azurerm_linux_function_app.main.default_hostname}"]
+      allowed_audiences          = [
+        "https://${azurerm_linux_function_app.main.default_hostname}",
+        "https://management.azure.com"
+      ]
+      # No client_id needed - validates any managed identity with proper audience
     }
   }
 
