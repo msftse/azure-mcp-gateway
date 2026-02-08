@@ -92,50 +92,11 @@ resource "azurerm_api_management_api_policy" "mcp" {
   api_management_name = azurerm_api_management.main.name
   resource_group_name = var.resource_group_name
 
-  xml_content = <<XML
-<policies>
-    <inbound>
-        <base />
-        <!-- SECURITY: Validate JWT token from Foundry Agent Managed Identity -->
-        <validate-jwt header-name="Authorization" 
-                      failed-validation-httpcode="401" 
-                      failed-validation-error-message="Unauthorized: Invalid or missing authentication token">
-            <openid-config url="https://login.microsoftonline.com/${var.tenant_id}/v2.0/.well-known/openid-configuration" />
-            <audiences>
-                <!-- Accept tokens for this APIM instance or Function App -->
-                <audience>https://${var.function_app_hostname}</audience>
-                <audience>https://management.azure.com</audience>
-            </audiences>
-            <issuers>
-                <issuer>https://sts.windows.net/${var.tenant_id}/</issuer>
-                <issuer>https://login.microsoftonline.com/${var.tenant_id}/v2.0</issuer>
-            </issuers>
-            <!-- SECURITY: Validate token is from managed identity (has oid claim) -->
-            <required-claims>
-                <claim name="oid" match="any">
-                    <!-- Optional: Restrict to specific Foundry Agent principal ID -->
-                    ${var.foundry_agent_principal_id != "" ? "<value>${var.foundry_agent_principal_id}</value>" : ""}
-                </claim>
-            </required-claims>
-        </validate-jwt>
-        <!-- Rate limiting (optional) -->
-        <rate-limit calls="100" renewal-period="60" />
-        <!-- Set backend URL -->
-        <set-backend-service base-url="https://${var.function_app_hostname}" />
-    </inbound>
-    <backend>
-        <!-- SECURITY: Use APIM Managed Identity to call Function App -->
-        <authentication-managed-identity resource="https://${var.function_app_hostname}" />
-        <base />
-    </backend>
-    <outbound>
-        <base />
-    </outbound>
-    <on-error>
-        <base />
-    </on-error>
-</policies>
-XML
+  xml_content = templatefile("${path.module}/policy.xml.tpl", {
+    tenant_id                   = var.tenant_id
+    function_app_hostname       = var.function_app_hostname
+    foundry_agent_principal_id  = var.foundry_agent_principal_id
+  })
 }
 
 # Named Value for Foundry Agent Principal ID (for reference in policies)
@@ -144,7 +105,7 @@ resource "azurerm_api_management_named_value" "foundry_principal_id" {
   name                = "foundry-agent-principal-id"
   resource_group_name = var.resource_group_name
   api_management_name = azurerm_api_management.main.name
-  display_name        = "Foundry Agent Principal ID"
+  display_name        = "Foundry-Agent-Principal-ID"
   value               = var.foundry_agent_principal_id
   secret              = false
 }

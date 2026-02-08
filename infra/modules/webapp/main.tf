@@ -39,10 +39,13 @@ resource "azurerm_linux_web_app" "main" {
       node_version = var.node_version
     }
 
-    # CORS settings (if needed)
-    cors {
-      allowed_origins = var.cors_allowed_origins
-      support_credentials = false
+    # CORS settings (only if origins are specified)
+    dynamic "cors" {
+      for_each = length(var.cors_allowed_origins) > 0 ? [1] : []
+      content {
+        allowed_origins     = var.cors_allowed_origins
+        support_credentials = false
+      }
     }
   }
 
@@ -51,8 +54,6 @@ resource "azurerm_linux_web_app" "main" {
     "APPLICATIONINSIGHTS_CONNECTION_STRING" = var.application_insights_connection_string
     "WEBSITE_NODE_DEFAULT_VERSION"          = "~${var.node_version}"
     "WEBSITE_RUN_FROM_PACKAGE"              = "1"
-    "WEBSITE_VNET_ROUTE_ALL"                = "1"
-    "WEBSITE_DNS_SERVER"                    = "168.63.129.16"
     
     # React environment variables (to be configured)
     "REACT_APP_FOUNDRY_ENDPOINT"            = var.foundry_endpoint

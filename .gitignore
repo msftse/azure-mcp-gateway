@@ -2,8 +2,9 @@
 **/.terraform/*
 *.tfstate
 *.tfstate.*
-*.tfvars
 !*.tfvars.example
+tfplan
+*.tfplan
 crash.log
 crash.*.log
 override.tf
@@ -14,6 +15,9 @@ override.tf.json
 terraform.rc
 backend-config-*.tfvars
 !backend-config-*.tfvars.example
+
+# Terraform lock file - COMMIT THIS
+# .terraform.lock.hcl should be committed to version control
 
 # Python
 __pycache__/

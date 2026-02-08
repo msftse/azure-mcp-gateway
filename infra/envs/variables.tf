@@ -130,7 +130,7 @@ variable "webapp_sku" {
 variable "node_version" {
   description = "Node.js version for the web app"
   type        = string
-  default     = "18"
+  default     = "18-lts"
 }
 
 variable "foundry_endpoint" {

@@ -16,14 +16,14 @@ terraform {
     }
   }
 
-  # Remote backend for state storage
-  backend "azurerm" {
-    # Configuration provided via backend-config.tfvars or environment variables
-    # resource_group_name  = "rg-terraform-state"
-    # storage_account_name = "sttfstate..."
-    # container_name       = "tfstate"
-    # key                  = "dev.terraform.tfstate"
-  }
+  # Local backend for state storage (no remote backend)
+  # backend "azurerm" {
+  #   # Configuration provided via backend-config.tfvars or environment variables
+  #   # resource_group_name  = "rg-terraform-state"
+  #   # storage_account_name = "sttfstate..."
+  #   # container_name       = "tfstate"
+  #   # key                  = "dev.terraform.tfstate"
+  # }
 }
 
 provider "azurerm" {

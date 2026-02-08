@@ -1,8 +1,0 @@
-# Terraform Backend Configuration for Development
-# Copy this file to backend-config-dev.tfvars and fill in your values
-# Use this file with: terraform init -backend-config=backend-config-dev.tfvars
-
-resource_group_name  = "rg-terraform-state"
-storage_account_name = "sttfstate<unique-suffix>"
-container_name       = "tfstate"
-key                  = "dev.terraform.tfstate"

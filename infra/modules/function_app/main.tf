@@ -137,9 +137,6 @@ resource "azurerm_linux_function_app" "main" {
   # SECURITY: Disable public access
   public_network_access_enabled = false
  
-  # Enable VNet integration for outbound calls
-  virtual_network_subnet_id = var.functions_pe_subnet_id
-
   # System-assigned Managed Identity
   identity {
     type = "SystemAssigned"
@@ -150,8 +147,6 @@ resource "azurerm_linux_function_app" "main" {
     "APPLICATIONINSIGHTS_CONNECTION_STRING" = var.application_insights_connection_string
     "FUNCTIONS_WORKER_RUNTIME"              = var.function_runtime
     "WEBSITE_CONTENTOVERVNET"               = "1"  # Required for private storage
-    "WEBSITE_DNS_SERVER"                    = "168.63.129.16"  # Azure DNS
-    "WEBSITE_VNET_ROUTE_ALL"                = "1"  # Route all traffic through VNet
   }
 
   site_config {
@@ -166,33 +161,34 @@ resource "azurerm_linux_function_app" "main" {
       python_version = var.function_runtime_version
     }
 
-    # CORS (if needed for frontend)
-    cors {
-      allowed_origins = var.cors_allowed_origins
+    # CORS (only if origins are specified)
+    dynamic "cors" {
+      for_each = length(var.cors_allowed_origins) > 0 ? [1] : []
+      content {
+        allowed_origins = var.cors_allowed_origins
+      }
     }
   }
 
-  # SECURITY: Enable Entra ID authentication
-  auth_settings_v2 {
-    auth_enabled           = true
-    require_authentication = true
-    unauthenticated_action = "Return401"
-
-    login {
-      token_store_enabled = true
-    }
-
-    active_directory_v2 {
-      # Use the Function App's own identity as the audience
-      # This allows managed identities with access to call the Function App
-      tenant_auth_endpoint       = "https://login.microsoftonline.com/${var.tenant_id}/v2.0"
-      allowed_audiences          = [
-        "https://${azurerm_linux_function_app.main.default_hostname}",
-        "https://management.azure.com"
-      ]
-      # No client_id needed - validates any managed identity with proper audience
-    }
-  }
+  # TODO: Enable Entra ID authentication
+  # Requires app registration for Function App to validate tokens
+  # auth_settings_v2 {
+  #   auth_enabled           = true
+  #   require_authentication = true
+  #   unauthenticated_action = "Return401"
+  #
+  #   login {
+  #     token_store_enabled = true
+  #   }
+  #
+  #   active_directory_v2 {
+  #     client_id              = "<function-app-registration-client-id>"
+  #     tenant_auth_endpoint   = "https://login.microsoftonline.com/${var.tenant_id}/v2.0"
+  #     allowed_audiences      = [
+  #       "api://<function-app-registration-client-id>"
+  #     ]
+  #   }
+  # }
 
   https_only = true
 

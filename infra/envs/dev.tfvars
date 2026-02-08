@@ -4,15 +4,15 @@
 # Usage: terraform plan -var-file="dev.tfvars"
 
 # Azure Configuration
-subscription_id = "<your-subscription-id>"
-tenant_id       = "<your-tenant-id>"
+subscription_id = "df5106e8-5b00-46cc-be36-6f8b3032d5a4"
+tenant_id       = "f6bf2550-3953-43ff-b71b-c4b8b4553452"
 location        = "swedencentral"
 environment     = "dev"
 project_name    = "mcpgw"
 
 # APIM Publisher Information
-apim_publisher_name  = "Your Organization"
-apim_publisher_email = "admin@yourorg.com"
+apim_publisher_name  = "MCP Gateway"
+apim_publisher_email = "itzhakjanach@microsoft.com"
 
 # Foundry Agent Configuration
 # Provide the Principal ID (object ID) of the Foundry Agent's Managed Identity
