@@ -1,0 +1,31 @@
+# Example terraform.tfvars for dev environment
+# Copy this file to terraform.tfvars and fill in your values
+# DO NOT commit terraform.tfvars to source control
+
+# Azure Configuration
+subscription_id = "<your-subscription-id>"
+tenant_id       = "<your-tenant-id>"
+location        = "eastus"
+environment     = "dev"
+project_name    = "mcpgw"
+
+# APIM Publisher Information
+apim_publisher_name  = "Your Organization"
+apim_publisher_email = "admin@yourorg.com"
+
+# Foundry Agent Configuration
+# Set to true to create a new Foundry Agent app registration
+create_foundry_agent = true
+# Or provide existing Foundry Agent client ID
+# foundry_agent_client_id = "<existing-foundry-agent-client-id>"
+
+# Optional: Foundry Endpoint
+# foundry_endpoint = "https://yourfoundry.endpoint.com"
+
+# Tags
+tags = {
+  Environment = "dev"
+  Project     = "Azure MCP Gateway"
+  ManagedBy   = "Terraform"
+  CostCenter  = "Engineering"
+}
